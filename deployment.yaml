@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: baaas
+spec:
+  selector:
+    app: baaas
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: http-web-svc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: baaas
+  name: baaas
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: baaas
+  template:
+    metadata:
+      labels:
+        app: baaas
+    spec:
+      containers:
+      - image: docker.io/lastcoolnameleft/bad-advice-generator:1
+        name: bad-advice-generator
+        imagePullPolicy: Always
+        ports:
+          - containerPort: 5000
+            name: http-web-svc
+        env:
+        - name: FLASK_APP
+          value: app
+        - name: FLASK_ENV
+          value: development
+        - name: OPENAI_DEPLOYMENT_NAME
+          value: text-davinci-003
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aoai
+              key: OPENAI_API_KEY
+        - name: OPENAI_ENDPOINT
+          valueFrom:
+            secretKeyRef:
+              name: aoai
+              key: OPENAI_ENDPOINT

@@ -1,1 +1,128 @@
-# kong-api-summit
+# Intent
+
+This repo is designed to walk through the Azure OpenAI demo at Kong's API Summit.
+
+## Architecture
+
+![](kong-aoai.png)
+
+## Prereqs
+
+* Azure Subscription
+* Azure CLI
+
+## Create resources
+
+[Azure Docs Reference](
+https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/create-resource?pivots=cli)
+```
+BAAAS_IMAGE=docker.io/lastcoolnameleft/bad-advice-generator
+RG=api-summit
+LOCATION=eastus
+AKS_NAME=api-summit-aks
+AOAI_NAME=api-summit-aoai
+
+az group create -n $RG -l $LOCATION
+az aks create -g $RG -n $AKS_NAME
+az aks get-credentials -g $RG -n $AKS_NAME
+
+az cognitiveservices account create \
+--name $AOAI_NAME \
+--resource-group $RG \
+--location $LOCATION \
+--kind OpenAI \
+--sku s0
+
+```
+
+## Deploy Model
+
+```
+az cognitiveservices account deployment create \
+--name $AOAI_NAME \
+--resource-group $RG  \
+--deployment-name text-davinci-003 \
+--model-name text-davinci-003 \
+--model-version "1"  \
+--model-format OpenAI \
+--sku-capacity "1" \
+--sku-name "Standard"
+```
+
+## Turn off all external network access to AOAI
+
+[Azure Docs Reference](https://learn.microsoft.com/en-us/azure/ai-services/cognitive-services-virtual-networks?tabs=portal)
+
+1. Go into portal and [enable custom domain](https://learn.microsoft.com/en-us/azure/ai-services/cognitive-services-custom-subdomains#how-does-this-impact-existing-resources)
+```
+az cognitiveservices account show \
+    --resource-group $RG --name $AOAI_NAME \
+    --query properties.networkAcls.defaultAction
+AOAI_RESOURCE_ID=$(az cognitiveservices account show --resource-group $RG --name $AOAI_NAME --query id --output tsv)
+echo $AOAI_RESOURCE_ID
+az resource update \
+    --ids $AOAI_RESOURCE_ID \
+    --set properties.networkAcls="{'defaultAction':'Deny'}"
+```
+
+## Enable VNet access
+```
+AKS_NODE_RG=$(az aks show -g $RG -n $AKS_NAME --query nodeResourceGroup -o tsv)
+# Assuming the first vnet in the AKS_NODE_RG is the one we want
+AKS_VNET_NAME=$(az network vnet list -g $AKS_NODE_RG --query '[0].name' -o tsv)
+AKS_SUBNET_NAME=$(az network vnet subnet list -g $AKS_NODE_RG --vnet-name $AKS_VNET_NAME --query '[0].name' -o tsv)
+AKS_SUBNET_ID=$(az network vnet subnet list -g $AKS_NODE_RG --vnet-name $AKS_VNET_NAME --query '[0].id' -o tsv)
+
+echo $AKS_NODE_RG 
+echo $AKS_VNET_NAME
+echo $AKS_SUBNET_NAME
+echo $AKS_SUBNET_ID
+
+# Should return an empty list because we haven't added anything yet
+az cognitiveservices account network-rule list \
+    --resource-group $RG --name $AOAI_NAME \
+    --query virtualNetworkRules
+
+az network vnet subnet update -g $AKS_NODE_RG --name $AKS_SUBNET_NAME \
+--vnet-name $AKS_VNET_NAME --service-endpoints "Microsoft.CognitiveServices"
+
+# Use the captured subnet identifier as an argument to the network rule addition
+az cognitiveservices account network-rule add \
+    --resource-group $RG --name $AOAI_NAME \
+    --subnet $AKS_SUBNET_ID
+
+# Should now return a single row 
+az cognitiveservices account network-rule list \
+    --resource-group $RG --name $AOAI_NAME \
+    --query virtualNetworkRules
+```
+
+## Create K8s Deployment
+
+```
+AOAI_ENDPOINT=$(az cognitiveservices account show -n $AOAI_NAME -g $RG --query 'properties.endpoint' -o tsv)
+AOAI_KEY=$(az cognitiveservices account keys list -n $AOAI_NAME -g $RG --query 'key1' -o tsv)
+echo $AOAI_ENDPOINT
+echo $AOAI_KEY
+
+kubectl create secret generic aoai --from-literal=OPENAI_API_KEY=$AOAI_KEY --from-literal=OPENAI_ENDPOINT=$AOAI_ENDPOINT
+kubectl apply -f ./deployment.yaml
+```
+
+## Deploy Kong
+
+https://docs.konghq.com/kubernetes-ingress-controller/latest/
+```
+
+kubectl create namespace kong
+helm repo add kong https://charts.konghq.com
+helm repo update
+# Download the certificate and key
+kubectl create secret tls konnect-client-tls -n kong --cert=./tls.crt --key=./tls.key
+# Download the values.yaml file
+helm install kong kong/ingress -n kong --values ./values.yaml
+```
+
+## Front Webapp + Azure OpenAI with Kong
+
+???
