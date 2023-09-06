@@ -4,7 +4,20 @@ This repo is designed to walk through the Azure OpenAI demo at Kong's API Summit
 
 ## Architecture
 
+This deployment uses the ["Bad Advice As a Service"](https://github.com/lastcoolnameleft/bad-advice-generator) repo docker image as an "uninteresting" webapp which provides a simple UI interface for Azure OpenAI.  Both the webapp and Azure OpenAI are fronted by Kong Ingress Controller.
+
+This meets the following requirements for this demo:
+- Deploy a simple webapp which uses OpenAI
+- Demonstrate using Kong to secure both the webapp and OpenAI
+- Prevent Azure OpenAI from being available from the public internet ([use Private Endpoints](https://learn.microsoft.com/en-us/azure/ai-services/cognitive-services-virtual-networks?context=%2Fazure%2Fai-services%2Fopenai%2Fcontext%2Fcontext&tabs=portal#use-private-endpoints))
+
 ![](kong-aoai.png)
+
+## Limitations
+
+For simplicity sake, there are additional best practices which this repo does not follow, but are recommended:
+- [Use Managed Identity instead of Key](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/managed-identity)
+- [Store customer managed keys in Azure Key Vault](https://learn.microsoft.com/en-us/azure/ai-services/openai/encrypt-data-at-rest#customer-managed-keys-with-azure-key-vault)
 
 ## Prereqs
 
