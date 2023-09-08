@@ -12,9 +12,9 @@ This meets the following requirements for this demo:
 - Prevent Azure OpenAI from being available from the public internet ([use Private Endpoints](https://learn.microsoft.com/en-us/azure/ai-services/cognitive-services-virtual-networks?context=%2Fazure%2Fai-services%2Fopenai%2Fcontext%2Fcontext&tabs=portal#use-private-endpoints))
 
 Security Goals:
-- Quota Management
-- Scaling out OpenAI (Capacity required is greater than 1 endpoint can handle.  Load balance across multiple instances)
-- Secure OpenAI
+- Protect webapp with OIDC
+- Rate-limit OpenAI requests
+- Restrict OpenAI endpoint to only internal subnet
 
 ![](kong-aoai.png)
 
@@ -150,23 +150,32 @@ helm install kong kong/ingress -n kong --values ./values.yaml
 kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.12.4/cert-manager.yaml
 ```
 
-## Front Webapp with Kong
+## Protect Webapp with Kong + OIDC
 
 Inspired by [Kong's OIDC documentation](https://docs.konghq.com/kubernetes-ingress-controller/2.11.x/guides/using-oidc-plugin/) and [Kong's OIDC AAD documentation](https://docs.konghq.com/gateway/latest/kong-plugins/authentication/oidc/azure-ad/)
 
+[Register an App in Azure Active Directory](https://learn.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app)
+
+Notable values to copy from App Registration into k8s definitions
+- Issuer: e.g. https://login.microsoftonline.com/16b3c013-d300-468d-ac64-7eda0820b6d3
+- Application (Client) ID: e.g. 1efaa100-501f-4055-a6a7-490b40b832df
+- Redirect URL: e.g. https://20.127.181.57.nip.io/
+- Client Secret: e.g. XXXXX~YYYY_ZZZZ0000
+
 ```
+# update k8s/kong-plugin-oidc.yaml with the specific OIDC values
+kubectl apply -f k8s/kong-plugin-oidc.yaml
+
 # update k8s/ingress-web.yaml with your public IP and email address (it will fail with example.com email)
 kubectl apply -f k8s/ingress-web.yaml
-
 ```
 
-## Front Azure OpenAI with Kong
+## Protect Azure OpenAI with Kong + Rate Limiting
 
-Inspired by [Kong's OIDC documentation](https://docs.konghq.com/kubernetes-ingress-controller/2.11.x/guides/using-oidc-plugin/)
-https://docs.konghq.com/gateway/latest/kong-plugins/authentication/oidc/azure-ad/
+Inspired by [Kong's rate limiting documentation](https://docs.konghq.com/hub/kong-inc/rate-limiting/) and [examples](https://docs.konghq.com/hub/kong-inc/rate-limiting/how-to/basic-example/)
 
 ```
 # update k8s/ingress-openai.yaml with Azure OpenAI endpoint
+kubectl apply -f k8s/kong-plugin-rate-limit.yaml
 kubectl apply -f k8s/ingress-openai.yaml
-
 ```
