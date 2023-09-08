@@ -31,6 +31,7 @@ metadata:
     konghq.com/preserve-host: "false"
     konghq.com/host-header: "api-summit-aoai.openai.azure.com" # Get value from $AOAI_ENDPOINT
     konghq.com/strip-path: "false"
+    konghq.com/plugins: openai-rate-limit
 spec:
   rules:
   - host: openai-internal-service

@@ -1,0 +1,15 @@
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: oidc-auth
+config:
+  issuer: https://login.microsoftonline.com/<AAD TENANT ID>/v2.0
+  scopes: ["<APP ID>/.default"]
+  verify_claims: false
+  client_id:
+  - <APP ID>
+  client_secret:
+  - <APP SECRET>
+  redirect_uri:
+  - https://<KONG EXTERNAL IP>.nip.io/
+plugin: openid-connect
