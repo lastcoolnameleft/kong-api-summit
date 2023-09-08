@@ -1,0 +1,45 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: openai-external-service
+  annotations:
+    konghq.com/protocol: https
+spec:
+  ports:
+  - protocol: TCP
+    port: 443
+  type: ExternalName
+  externalName: api-summit-aoai.openai.azure.com # Get value from $AOAI_ENDPOINT
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: openai-internal-service
+spec:
+  ports:
+  - protocol: TCP
+    port: 80
+  type: ExternalName
+  externalName: kong-gateway-proxy.kong.svc.cluster.local
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: openai-ingress
+  annotations:
+    kubernetes.io/ingress.class: kong
+    konghq.com/preserve-host: "false"
+    konghq.com/host-header: "api-summit-aoai.openai.azure.com" # Get value from $AOAI_ENDPOINT
+    konghq.com/strip-path: "false"
+spec:
+  rules:
+  - host: openai-internal-service
+    http:
+      paths:
+      - path: /
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: openai-external-service
+            port:
+              number: 443

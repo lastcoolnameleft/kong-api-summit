@@ -50,3 +50,7 @@ spec:
             secretKeyRef:
               name: aoai
               key: OPENAI_ENDPOINT
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "128Mi"

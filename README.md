@@ -7,9 +7,14 @@ This repo is designed to walk through the Azure OpenAI demo at Kong's API Summit
 This deployment uses the ["Bad Advice As a Service"](https://github.com/lastcoolnameleft/bad-advice-generator) repo docker image as an "uninteresting" webapp which provides a simple UI interface for Azure OpenAI.  Both the webapp and Azure OpenAI are fronted by Kong Ingress Controller.
 
 This meets the following requirements for this demo:
-- Deploy a simple webapp which uses OpenAI
+- Deploy a simple webapp which uses OpenAI in Azure Kubernetes Service
 - Demonstrate using Kong to secure both the webapp and OpenAI
 - Prevent Azure OpenAI from being available from the public internet ([use Private Endpoints](https://learn.microsoft.com/en-us/azure/ai-services/cognitive-services-virtual-networks?context=%2Fazure%2Fai-services%2Fopenai%2Fcontext%2Fcontext&tabs=portal#use-private-endpoints))
+
+Security Goals:
+- Quota Management
+- Scaling out OpenAI (Capacity required is greater than 1 endpoint can handle.  Load balance across multiple instances)
+- Secure OpenAI
 
 ![](kong-aoai.png)
 
@@ -36,7 +41,7 @@ AKS_NAME=api-summit-aks
 AOAI_NAME=api-summit-aoai
 
 az group create -n $RG -l $LOCATION
-az aks create -g $RG -n $AKS_NAME
+az aks create -g $RG -n $AKS_NAME --enable-oidc-issuer
 az aks get-credentials -g $RG -n $AKS_NAME
 
 az cognitiveservices account create \
@@ -45,7 +50,6 @@ az cognitiveservices account create \
 --location $LOCATION \
 --kind OpenAI \
 --sku s0
-
 ```
 
 ## Deploy Model
@@ -118,8 +122,8 @@ AOAI_KEY=$(az cognitiveservices account keys list -n $AOAI_NAME -g $RG --query '
 echo $AOAI_ENDPOINT
 echo $AOAI_KEY
 
-kubectl create secret generic aoai --from-literal=OPENAI_API_KEY=$AOAI_KEY --from-literal=OPENAI_ENDPOINT=$AOAI_ENDPOINT
-kubectl apply -f ./deployment.yaml
+kubectl create secret generic aoai --from-literal=OPENAI_API_KEY=$AOAI_KEY --from-literal=OPENAI_ENDPOINT=https://openai-internal-service
+kubectl apply -f k8s/deployment.yaml
 ```
 
 ## Deploy Kong
@@ -130,12 +134,39 @@ https://docs.konghq.com/kubernetes-ingress-controller/latest/
 kubectl create namespace kong
 helm repo add kong https://charts.konghq.com
 helm repo update
-# Download the certificate and key
+
+# From the Kong Portal, download the certificate and key
 kubectl create secret tls konnect-client-tls -n kong --cert=./tls.crt --key=./tls.key
-# Download the values.yaml file
+# From the Kong Portal, download the values.yaml file
 helm install kong kong/ingress -n kong --values ./values.yaml
 ```
 
-## Front Webapp + Azure OpenAI with Kong
+## Deploy Cert Manager (Create SSL cert for webapp)
 
-???
+```
+# https://docs.konghq.com/kubernetes-ingress-controller/latest/guides/cert-manager/
+# https://cert-manager.io/docs/installation/
+
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.12.4/cert-manager.yaml
+```
+
+## Front Webapp with Kong
+
+Inspired by [Kong's OIDC documentation](https://docs.konghq.com/kubernetes-ingress-controller/2.11.x/guides/using-oidc-plugin/) and [Kong's OIDC AAD documentation](https://docs.konghq.com/gateway/latest/kong-plugins/authentication/oidc/azure-ad/)
+
+```
+# update k8s/ingress-web.yaml with your public IP and email address (it will fail with example.com email)
+kubectl apply -f k8s/ingress-web.yaml
+
+```
+
+## Front Azure OpenAI with Kong
+
+Inspired by [Kong's OIDC documentation](https://docs.konghq.com/kubernetes-ingress-controller/2.11.x/guides/using-oidc-plugin/)
+https://docs.konghq.com/gateway/latest/kong-plugins/authentication/oidc/azure-ad/
+
+```
+# update k8s/ingress-openai.yaml with Azure OpenAI endpoint
+kubectl apply -f k8s/ingress-openai.yaml
+
+```

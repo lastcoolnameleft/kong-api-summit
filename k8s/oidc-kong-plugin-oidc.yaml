@@ -1,0 +1,13 @@
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: oidc-auth
+config:
+  issuer: https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration
+  client_id:
+  - <CLIENT_ID>
+  client_secret:
+  - <CLIENT_SECRET>
+  redirect_uri:
+  - http://20.127.181.57.nip.io
+plugin: openid-connect
